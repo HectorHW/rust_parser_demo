@@ -1,6 +1,6 @@
 use crate::vm::OpCode;
 use crate::parser::{Expr, ExprType};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct Chunk{
     pub program:Vec<OpCode>,
@@ -22,7 +22,7 @@ impl Chunk{
 
     pub fn compile_from(&mut self, ast:&Expr) -> Result<Vec<i32>, String> {
         self.find_constants(ast);
-        self.find_variables(ast);
+        self.find_variables(ast, &mut HashSet::new());
 
         let mut value_stack = vec![0;self.constant_size+self.variable_size];
 
@@ -46,12 +46,17 @@ impl Chunk{
         }
     }
 
-    fn find_variables(&mut self, ast:&Expr){
-        match ast.expr_type {
-            ExprType::AssignStmt(..) => {self.variable_size+=1; return;}
+    fn find_variables<'c>(&mut self, ast:&'c Expr, names:&mut HashSet<&'c str>){
+        match &ast.expr_type {
+            ExprType::AssignStmt(variable_name) => {
+                if !names.contains(variable_name.as_str()) {
+                    names.insert(variable_name.as_str());
+                    self.variable_size+=1;
+                }
+                return;}
             _ => {
                 for item in ast.children.as_slice() {
-                    self.find_variables(item);
+                    self.find_variables(item, names);
                 }
             }
         }
