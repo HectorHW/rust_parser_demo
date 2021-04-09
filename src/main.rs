@@ -34,13 +34,14 @@ fn main() {
         Err(msg) => {println!("{}", msg); return;}
     };
 
+    /*
      println!("{}",
               tokens
                   .iter()
                   .map(|x| format!("{}", x))
                   .collect::<Vec<String>>()
                   .join(", ")
-     );
+     );*/
 
     let ast = match parser::parse(&tokens) {
         Ok(res) => {res}

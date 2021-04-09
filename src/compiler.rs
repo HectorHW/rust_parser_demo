@@ -14,6 +14,7 @@ impl Chunk{
     }
 
     pub fn dump_stdout(&self){
+        println!("constant_size={}\nvariable_size={}", self.constant_size, self.variable_size);
         for item in &self.program {
             println!("{}", item);
         }
@@ -47,10 +48,10 @@ impl Chunk{
 
     fn find_variables(&mut self, ast:&Expr){
         match ast.expr_type {
-            ExprType::Variable(_) => {self.variable_size+=1; return;}
+            ExprType::AssignStmt(..) => {self.variable_size+=1; return;}
             _ => {
                 for item in ast.children.as_slice() {
-                    self.find_constants(item);
+                    self.find_variables(item);
                 }
             }
         }
@@ -82,7 +83,7 @@ impl Chunk{
                 if let None = idx {
                     return Err(format!("unknown variable {}", name));
                 }
-                self.program.push(OpCode::Load(*idx.unwrap() as u8));
+                self.program.push(OpCode::Load((*idx.unwrap()+ self.constant_size) as u8 ));
             }
 
             ExprType::AssignStmt(name) => {
@@ -102,7 +103,7 @@ impl Chunk{
 
                 self.compile(value_stack, compiler, &ast.children[0])?;
 
-                self.program.push(OpCode::Store(idx as u8));
+                self.program.push(OpCode::Store((idx+ self.constant_size) as u8));
             }
 
             ExprType::PrintStmt => {
