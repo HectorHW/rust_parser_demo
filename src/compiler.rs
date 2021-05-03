@@ -86,6 +86,21 @@ impl Compiler<'_> {
         return Ok(());
     }
 
+    fn push_extensions(code_chunk:&mut Chunk, addr:usize){
+        if addr<= 0xff {
+            return;
+        }
+
+        let arr: Vec<u8> = addr.to_be_bytes().to_vec();
+        let arr:Vec<u8> = arr.into_iter().skip_while(|x| *x==0u8).collect();
+        let arr = arr.split_last().unwrap().1;
+
+        for x in arr {
+            code_chunk.program.push(OpCode::Extend(*x));
+        }
+
+    }
+
     fn compile_ast(&mut self, code_chunk:&mut Chunk,  ast: &Expr) -> Result<(), String>{
         match &ast.expr_type {
             ExprType::Op(c) => {
@@ -104,17 +119,18 @@ impl Compiler<'_> {
             ExprType::Literal(i) => {
                 let idx = code_chunk.constant_pool.len();
                 code_chunk.constant_pool.push(*i);
-                //TODO extension
+                Compiler::push_extensions(code_chunk, idx);
                 code_chunk.program.push(OpCode::LoadConst(idx as u8));
 
             }
             ExprType::Variable(name) => {
-                let idx = self.name_map.get(name.as_str());
-                if let None = idx {
-                    return Err(format!("unknown variable {}", name));
-                }
-                //TODO extension
-                code_chunk.program.push(OpCode::LoadVar((*idx.unwrap()) as u8 ));
+                let idx = match self.name_map.get(name.as_str()){
+                    None => {return Err(format!("unknown variable {}", name));}
+                    Some(x) => {*x}
+                };
+
+                Compiler::push_extensions(code_chunk, idx);
+                code_chunk.program.push(OpCode::LoadVar(idx as u8 ));
             }
 
             ExprType::AssignStmt(name) => {
@@ -140,7 +156,7 @@ impl Compiler<'_> {
                 if !ast.children.is_empty() { // has initializer
                     self.compile_ast(code_chunk, ast.children.first().unwrap())?;
                     let idx:usize = *self.name_map.get(varname.as_str()).unwrap();
-                    //TODO extension
+                    Compiler::push_extensions(code_chunk, idx);
                     code_chunk.program.push(OpCode::Store(idx as u8));
                 }
             }

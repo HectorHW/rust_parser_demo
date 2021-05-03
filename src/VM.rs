@@ -94,7 +94,7 @@ impl VM{
                     }
                 }
                 OpCode::Store(i) => {if let Some(value) = self.checked_stack_pop() {
-                    idx_register = idx_register<<8 + i;
+                    idx_register = (idx_register<<8) + i as usize;
 
                     self.stack[idx_register] = value;
                     idx_register = 0;
@@ -102,7 +102,7 @@ impl VM{
 
                 }
                 OpCode::LoadVar(i) => {if i as usize>=self.initial_stack_size {status = Err("value indexation error".to_string()); break;}
-                    idx_register = idx_register<<8 + i;
+                    idx_register = (idx_register<<8) + i as usize;
                     self.stack.push(self.stack[idx_register]);
                     idx_register = 0;
                 }
@@ -114,10 +114,10 @@ impl VM{
                     }
                 }
                 OpCode::Extend(i) => {
-                    idx_register = idx_register<<8 + i;
+                    idx_register = (idx_register<<8) + i as usize;
                 }
                 OpCode::LoadConst(i) => {
-                    idx_register = idx_register<<8 + i;
+                    idx_register = (idx_register<<8) + i as usize;
                     self.stack.push(self.code_chunk.constant_pool[idx_register]);
                     idx_register = 0;
                 }
