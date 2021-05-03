@@ -35,6 +35,7 @@ pub enum ExprType {
 
     PrintStmt,
     AssignStmt(String),
+    VarDeclStmt(String),
 
     Program
 }
@@ -52,6 +53,18 @@ impl Expr{
             expr_type: ExprType::Literal(0)
         }
     }
+}
+
+fn consume(iterator: &mut Peekable<Iter<Token>>, expected:&Token, error_msg:String) -> Result<(), String> {
+    let token = match iterator.next() {
+        Some(t) => {t}
+        None => {return Err("unexpected end".to_string())}
+    };
+
+    if std::mem::discriminant(token)!=std::mem::discriminant(expected){
+        return Err(error_msg);
+    }
+    return Ok(());
 }
 
 fn term(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
@@ -159,6 +172,26 @@ fn print_stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
 
 }
 
+fn var_decl_stmt(iterator:&mut Peekable<Iter<Token>>) -> Result<Expr, String> {
+    iterator.next(); //consume var
+    let var_name = match iterator.next() {
+        Some(Token::Identifier(s)) => {s.clone()}
+        r => {return Err(format!("expected var name, got {}", r.unwrap()));}
+    };
+
+    let mut res = Expr{expr_type:ExprType::VarDeclStmt(var_name), children:Vec::new()};
+    match iterator.peek(){
+        Some(Token::Equals) => {
+            iterator.next(); // consume =
+            let assignee = expr(iterator)?;
+            res.children.push(assignee);
+        }
+        _ => {}
+    }
+    consume(iterator, &Token::Semicolon, "expected ';'".to_string())?;
+    return Ok(res);
+}
+
 
 fn assign_stmt(iterator:&mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     let var_name = iterator.next(); //take and cosume name
@@ -195,8 +228,9 @@ fn stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     if let Some(token) = iterator.peek() {
         match *token {
             Token::Print => { return print_stmt(iterator); }
+            Token::Var => {return var_decl_stmt(iterator); }
             Token::Identifier(_) => { return assign_stmt(iterator); }
-            _ => {return Err("unexpected token.".to_string())}
+            r => {return Err(format!("unexpected token {}", r))}
         }
     }else{
         return Err("unexpected end of string".to_string());
@@ -206,8 +240,12 @@ fn stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
 fn program(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     let mut res = Expr::new();
     res.expr_type = ExprType::Program;
-    while let Some(..) = iterator.peek() {
-        res.children.push(stmt(iterator)?);
+    while let Some(x) = iterator.peek() {
+        match x {
+            Token::EOF => {break;}
+            _ => {res.children.push(stmt(iterator)?);}
+        }
+
     }
     return Ok(res);
 }

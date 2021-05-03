@@ -52,9 +52,8 @@ fn main() {
     lisp_print::visit(&ast);
     println!();
 
-    let mut code_chunk = Chunk::new();
-    let value_stack = code_chunk.compile_from(&ast);
-    let value_stack = match value_stack {
+    let code_chunk = Chunk::compile_from(&ast);
+    let code_chunk = match code_chunk {
         Ok(value) => {value}
         Err(msg) => {
             println!("{}", msg);
@@ -65,7 +64,7 @@ fn main() {
 
     code_chunk.dump_stdout();
 
-    let mut vm = VM::new(value_stack, code_chunk);
+    let mut vm = VM::new(code_chunk);
 
     match vm.run() {
         Ok(_) => {}

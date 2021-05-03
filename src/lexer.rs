@@ -7,22 +7,26 @@ pub enum Token{
     LBracket,
     RBracket,
     Print,
+    Var,
     Equals,
     Identifier(String),
-    Semicolon
+    Semicolon,
+    EOF
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
             Token::Op(c) => {format!("<operator {}>", c)}
-            Token::Number(n) => {format!("<number {}>", n)}
+            Token::Number(n) => {format!("<Number {}>", n)}
             Token::LBracket => {"<(>".to_string()}
             Token::RBracket => {"<)>".to_string()}
             Token::Print => {"<print>".to_string()}
             Token::Equals => {"<=>".to_string()}
             Token::Identifier(name) => {format!("<variable {}>", name)}
             Token::Semicolon => {"<;>".to_string()}
+            Token::Var => {"<var>".to_string()}
+            Token::EOF => {"<EOF>".to_string()}
         })
     }
 }
@@ -78,6 +82,10 @@ pub fn tokenize(input:&str) -> Result<Vec<Token>, String>{
                     "print" => {
                         res.push(Print);
                     }
+                    "var" => {
+                        res.push(Var);
+                    }
+
                     _ => {
                         res.push(Identifier(token));
                     }
@@ -93,6 +101,7 @@ pub fn tokenize(input:&str) -> Result<Vec<Token>, String>{
             _ => {return Err(format!("unknown character {} at {}", c, (*pair).0))}
         }
     }
+    res.push(Token::EOF);
     return Ok(res);
 }
 

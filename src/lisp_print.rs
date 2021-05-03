@@ -26,5 +26,11 @@ pub fn visit(item: &Expr){
                 println!();
             }
         }
+        ExprType::VarDeclStmt(name) => {
+            print!("(= {} {})", name, match item.children.first(){
+                None => {"Nil"}
+                Some(ast) => {visit(ast); ""}
+            })
+        }
     }
 }

@@ -1,138 +1,151 @@
 use crate::vm::OpCode;
 use crate::parser::{Expr, ExprType};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 
 pub struct Chunk{
     pub program:Vec<OpCode>,
-    pub constant_size:usize,
     pub variable_size:usize,
+
+    pub constant_pool: Vec<i32>
 }
 
 impl Chunk{
     pub fn new() -> Chunk{
-        return Chunk{program:Vec::new(), constant_size:0, variable_size:0};
+        return Chunk{program:Vec::new(), variable_size:0, constant_pool:Vec::new()};
     }
 
     pub fn dump_stdout(&self){
-        println!("constant_size={}\nvariable_size={}", self.constant_size, self.variable_size);
+        println!("constant_size={}\nvariable_size={}", self.constant_pool.len(), self.variable_size);
         for item in &self.program {
             println!("{}", item);
         }
     }
 
-    pub fn compile_from(&mut self, ast:&Expr) -> Result<Vec<i32>, String> {
-        self.find_constants(ast);
-        self.find_variables(ast, &mut HashSet::new());
+    pub fn compile_from(ast:&Expr) -> Result<Chunk, String> {
+        Compiler::compile(ast)
+    }
+}
 
-        let mut value_stack = vec![0;self.constant_size+self.variable_size];
+pub struct Compiler<'c> {
+    name_map:HashMap<&'c str, usize>
+}
 
-        let mut compiler = Compiler{constant_size:self.constant_size, variable_size:self.variable_size,
-        constant_counter:0, variable_counter:0, name_map:HashMap::new()};
+impl Compiler<'_> {
 
+    pub fn compile(ast:&Expr) -> Result<Chunk, String> {
 
-        self.compile(&mut value_stack, &mut compiler, ast)?;
+        let mut name_map:HashMap<&str, usize> = HashMap::new(); //variable -> variable_idx
+        let mut variable_size= 0usize;
+        Compiler::find_variables(ast, &mut name_map, &mut variable_size)?;
 
-        return Ok(value_stack);
+        let mut code_chunk = Chunk::new();
+        code_chunk.variable_size = name_map.len();
+
+        let mut comp = Compiler{ name_map };
+        comp.compile_ast(&mut code_chunk, ast)?;
+
+        Ok(code_chunk)
     }
 
-    fn find_constants(&mut self, ast:&Expr){
-        match ast.expr_type {
-            ExprType::Literal(_) => {self.constant_size+=1; return;}
-            _ => {
-                for item in ast.children.as_slice() {
-                    self.find_constants(item);
-                }
-            }
-        }
-    }
-
-    fn find_variables<'c>(&mut self, ast:&'c Expr, names:&mut HashSet<&'c str>){
+    fn find_variables<'a>(ast:&'a Expr, names:&mut HashMap<&'a str, usize>, variable_counter: &mut usize) -> Result<(), String>{
+        /*
+        builds variable index & checks for name errors
+         */
         match &ast.expr_type {
             ExprType::AssignStmt(variable_name) => {
-                if !names.contains(variable_name.as_str()) {
-                    names.insert(variable_name.as_str());
-                    self.variable_size+=1;
+                return if !names.contains_key(variable_name.as_str()) {
+                    Err(format!("undeclared variable {}", variable_name))
+                } else {
+                    Ok(())
                 }
-                return;}
+            }
+
+            ExprType::VarDeclStmt(variable_name) => {
+                if !ast.children.is_empty() {
+                    Compiler::find_variables(ast.children.first().unwrap(),
+                    names, variable_counter)?;
+                }
+
+
+                if names.contains_key(variable_name.as_str()){
+                    return Err(format!("redefinition of variable {}", variable_name));
+                }else{
+                    let idx = *variable_counter;
+                    names.insert(variable_name.as_str(), idx);
+                    *variable_counter += 1;
+                    return Ok(());
+                }
+            }
+
             _ => {
                 for item in ast.children.as_slice() {
-                    self.find_variables(item, names);
-                }
-            }
-        }
-    }
-
-    fn compile<'c>(&mut self, value_stack:&mut Vec<i32>, compiler:&mut Compiler<'c>, ast: &'c Expr) -> Result<(), String>{
-        match &ast.expr_type {
-            ExprType::Op(c) => {
-                self.compile(value_stack, compiler, &ast.children[0])?;
-                self.compile(value_stack, compiler, &ast.children[1])?;
-
-                match c {
-                    '+' => {self.program.push(OpCode::Add)}
-                    '-' => {self.program.push(OpCode::Sub)}
-                    '*' => {self.program.push(OpCode::Mult)}
-                    '/' => {self.program.push(OpCode::Div)}
-                    _ => {} //wont happen (hopefully)
-                }
-            }
-            ExprType::Literal(i) => {
-                let idx = compiler.constant_counter;
-                compiler.constant_counter+=1;
-                value_stack[idx] = *i;
-                self.program.push(OpCode::Load(idx as u8));
-
-            }
-            ExprType::Variable(name) => {
-                let idx = compiler.name_map.get(name.as_str());
-                if let None = idx {
-                    return Err(format!("unknown variable {}", name));
-                }
-                self.program.push(OpCode::Load((*idx.unwrap()+ self.constant_size) as u8 ));
-            }
-
-            ExprType::AssignStmt(name) => {
-
-                let idx:usize = match compiler.name_map.get(name.as_str()) {
-                    None => {
-                        let idx = compiler.variable_counter;
-                        compiler.name_map.insert(name.as_str(), idx);
-                        compiler.variable_counter+=1;
-                        idx
-
-                    }
-                    Some(idx) => {
-                        *idx
-                    }
-                };
-
-                self.compile(value_stack, compiler, &ast.children[0])?;
-
-                self.program.push(OpCode::Store((idx+ self.constant_size) as u8));
-            }
-
-            ExprType::PrintStmt => {
-                self.compile(value_stack, compiler, &ast.children[0])?;
-                self.program.push(OpCode::Print);
-            }
-            ExprType::Program => {
-                for stmt in &ast.children{
-                    self.compile(value_stack, compiler, stmt)?;
+                    Compiler::find_variables(item, names, variable_counter)?;
                 }
             }
         }
         return Ok(());
     }
 
+    fn compile_ast(&mut self, code_chunk:&mut Chunk,  ast: &Expr) -> Result<(), String>{
+        match &ast.expr_type {
+            ExprType::Op(c) => {
+                self.compile_ast(code_chunk,  &ast.children[0])?;
+                self.compile_ast(code_chunk,  &ast.children[1])?;
 
-}
+                match c {
+                    '+' => {code_chunk.program.push(OpCode::Add)}
+                    '-' => {code_chunk.program.push(OpCode::Sub)}
+                    '*' => {code_chunk.program.push(OpCode::Mult)}
+                    '/' => {code_chunk.program.push(OpCode::Div)}
+                    _ => {} //wont happen (hopefully)
+                }
+            }
 
-#[allow(unused, dead_code)]
-pub struct Compiler<'c> {
-    constant_size:usize,
-    variable_size:usize,
+            ExprType::Literal(i) => {
+                let idx = code_chunk.constant_pool.len();
+                code_chunk.constant_pool.push(*i);
+                //TODO extension
+                code_chunk.program.push(OpCode::LoadConst(idx as u8));
 
-    constant_counter:usize,
-    variable_counter:usize,
-    name_map:HashMap<&'c str, usize>
+            }
+            ExprType::Variable(name) => {
+                let idx = self.name_map.get(name.as_str());
+                if let None = idx {
+                    return Err(format!("unknown variable {}", name));
+                }
+                //TODO extension
+                code_chunk.program.push(OpCode::LoadVar((*idx.unwrap()) as u8 ));
+            }
+
+            ExprType::AssignStmt(name) => {
+                //we know that names are fine resolved
+                let idx:usize = *self.name_map.get(name.as_str()).unwrap();
+
+                self.compile_ast(code_chunk, &ast.children[0])?;
+
+                code_chunk.program.push(OpCode::Store(idx as u8));
+            }
+
+            ExprType::PrintStmt => {
+                self.compile_ast(code_chunk, &ast.children[0])?;
+                code_chunk.program.push(OpCode::Print);
+            }
+            ExprType::Program => {
+                for stmt in &ast.children{
+                    self.compile_ast(code_chunk, stmt)?;
+                }
+            }
+
+            ExprType::VarDeclStmt(varname) => {
+                if !ast.children.is_empty() { // has initializer
+                    self.compile_ast(code_chunk, ast.children.first().unwrap())?;
+                    let idx:usize = *self.name_map.get(varname.as_str()).unwrap();
+                    //TODO extension
+                    code_chunk.program.push(OpCode::Store(idx as u8));
+                }
+            }
+        }
+        return Ok(());
+    }
+
 }

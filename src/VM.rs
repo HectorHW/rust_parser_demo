@@ -1,6 +1,7 @@
 pub enum OpCode{
     Add, Sub, Mult, Div,
-    Store(u8), Load(u8),
+    Store(u8), LoadVar(u8), LoadConst(u8),
+    Extend(u8),
     Print
 }
 
@@ -12,8 +13,10 @@ impl Display for OpCode{
             OpCode::Mult => {"[MULT]".to_string()}
             OpCode::Div => {"[DIV]".to_string()}
             OpCode::Store(idx) => {format!("[STORE {}]", idx)}
-            OpCode::Load(idx) => {format!("[LOAD {}]", idx)}
+            OpCode::LoadVar(idx) => {format!("[LOAD_VAR {}]", idx)}
             OpCode::Print => {"[PRINT]".to_string()}
+            OpCode::Extend(idx) => {format!("[EXTEND {}]", idx)}
+            OpCode::LoadConst(idx) => {format!("[LOAD_CONST {}]", idx)}
         })
     }
 }
@@ -30,10 +33,10 @@ pub struct VM{
 }
 
 impl VM{
-    pub fn new(stack:Vec<i32>, code_chunk:Chunk) -> VM {
-        return VM{stack:stack,
-            initial_stack_size: code_chunk.constant_size+code_chunk.variable_size,
-            code_chunk:code_chunk
+    pub fn new(code_chunk:Chunk) -> VM {
+        return VM{stack:vec![0;code_chunk.variable_size],
+            initial_stack_size: code_chunk.variable_size,
+            code_chunk
         }
     }
 
@@ -49,6 +52,8 @@ impl VM{
     pub fn run(&mut self) -> Result<(), String> {
 
         let mut ip = 0;
+
+        let mut idx_register:usize = 0;
 
         let mut status = Ok(());
 
@@ -89,12 +94,17 @@ impl VM{
                     }
                 }
                 OpCode::Store(i) => {if let Some(value) = self.checked_stack_pop() {
-                    self.stack[i as usize] = value;
+                    idx_register = idx_register<<8 + i;
+
+                    self.stack[idx_register] = value;
+                    idx_register = 0;
                 }else{ status = Err("stack underflow".to_string()); break;}
 
                 }
-                OpCode::Load(i) => {if i as usize>=self.initial_stack_size {status = Err("value indexation error".to_string()); break;}
-                    self.stack.push(self.stack[i as usize]);
+                OpCode::LoadVar(i) => {if i as usize>=self.initial_stack_size {status = Err("value indexation error".to_string()); break;}
+                    idx_register = idx_register<<8 + i;
+                    self.stack.push(self.stack[idx_register]);
+                    idx_register = 0;
                 }
                 OpCode::Print => {
                     if let Some(value) = self.checked_stack_pop() {
@@ -102,6 +112,14 @@ impl VM{
                     }else{
                         status = Err("stack underflow".to_string()); break;
                     }
+                }
+                OpCode::Extend(i) => {
+                    idx_register = idx_register<<8 + i;
+                }
+                OpCode::LoadConst(i) => {
+                    idx_register = idx_register<<8 + i;
+                    self.stack.push(self.code_chunk.constant_pool[idx_register]);
+                    idx_register = 0;
                 }
             }
             ip+=1;
