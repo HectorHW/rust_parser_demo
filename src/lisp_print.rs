@@ -27,10 +27,14 @@ pub fn visit(item: &Expr){
             }
         }
         ExprType::VarDeclStmt(name) => {
-            print!("(= {} {})", name, match item.children.first(){
-                None => {"Nil"}
-                Some(ast) => {visit(ast); ""}
-            })
+
+            print!("(= {} ", name);
+
+            match item.children.first(){
+                None => {print!("Nil")}
+                Some(ast) => {visit(ast);}
+            }
+            print!(")");
         }
     }
 }
