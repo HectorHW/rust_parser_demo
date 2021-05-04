@@ -45,14 +45,14 @@ pub fn tokenize(input:&str) -> Result<Vec<Token>, String>{
             '(' => {res.push(LBracket); iterator.next();}
             ')' => {res.push(RBracket); iterator.next();}
 
-            _ if ('1'..='9').contains(&c) => {
+            _ if isnum(c) => {
                 let mut num = String::new();
                 num.push(c);
                 iterator.next();
 
                 while let Some(c) = iterator.peek().map(|pair| (*pair).1)  {
 
-                    if ('0'..='9').contains(&c) {
+                    if isnum(c) {
                         num.push(c);
                         iterator.next();
                     }else{
@@ -108,7 +108,10 @@ pub fn tokenize(input:&str) -> Result<Vec<Token>, String>{
 fn isalpha(c:char) -> bool {
     return ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c=='_';
 }
+fn isnum(c:char) -> bool {
+    return ('0'..='9').contains(&c);
+}
 
 fn isalphanum(c:char) -> bool {
-    return isalpha(c) || ('0'..='9').contains(&c);
+    return isalpha(c) || isnum(c)
 }

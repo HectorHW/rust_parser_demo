@@ -55,8 +55,9 @@ impl VM{
             self.initial_stack_size+=code_chunk.variable_size;
             self.stack.append(&mut vec![0; code_chunk.variable_size]);
         }
-
+        #[cfg(debug_assertions)]
         println!("VM: stack_size={}, stack.len()={}", self.initial_stack_size, self.stack.len());
+        //won't be printed in release
 
         let mut ip = 0;
 
