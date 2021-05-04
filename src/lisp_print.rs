@@ -1,6 +1,10 @@
 use crate::parser::{ExprType, Expr};
 
-pub fn visit(item: &Expr){
+pub fn visit(program:&Expr) {
+    _visit(program);
+}
+
+fn _visit(item: &Expr){
     match &item.expr_type {
         ExprType::Op(c) => {
             print!("({} ", c);

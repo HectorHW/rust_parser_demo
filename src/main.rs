@@ -37,8 +37,8 @@ fn run_repl(){
             Err(msg) => {println!("{}", msg); continue;}
         };
 
-        lisp_print::visit(&ast);
-        println!();
+        #[cfg(debug_assertions)]
+        lisp_print::visit(&ast); //won't be printed in release
 
         let code_chunk = compiler.continue_compile(&ast);
         let code_chunk = match code_chunk {
@@ -48,6 +48,9 @@ fn run_repl(){
                 continue;
             }
         };
+
+        #[cfg(debug_assertions)]
+        code_chunk.dump_stdout(); //won't be printed in release
 
         match vm.run(&code_chunk) {
             Ok(_) => {}
@@ -104,9 +107,8 @@ fn main() {
         Err(msg) => {println!("{}", msg); return;}
     };
 
-
-    lisp_print::visit(&ast);
-    println!();
+    #[cfg(debug_assertions)]
+    lisp_print::visit(&ast); //won't be printed in release
 
     let code_chunk = Chunk::compile_from(&ast);
     let code_chunk = match code_chunk {
@@ -117,8 +119,8 @@ fn main() {
         }
     };
 
-
-    code_chunk.dump_stdout();
+    #[cfg(debug_assertions)]
+    code_chunk.dump_stdout(); //won't be printed in release
 
     let mut vm = VM::new();
 
