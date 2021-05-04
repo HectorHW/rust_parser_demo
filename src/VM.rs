@@ -29,14 +29,12 @@ pub struct VM{
     pub stack:Vec<i32>,
     pub initial_stack_size:usize,
 
-    pub code_chunk:Chunk
 }
 
 impl VM{
-    pub fn new(code_chunk:Chunk) -> VM {
-        return VM{stack:vec![0;code_chunk.variable_size],
-            initial_stack_size: code_chunk.variable_size,
-            code_chunk
+    pub fn new() -> VM {
+        return VM{stack:Vec::new(),
+            initial_stack_size: 0
         }
     }
 
@@ -49,7 +47,16 @@ impl VM{
         self.stack.truncate(self.initial_stack_size);
     }
 
-    pub fn run(&mut self) -> Result<(), String> {
+    pub fn run(&mut self, code_chunk:&Chunk) -> Result<(), String> {
+
+
+
+        if code_chunk.variable_size>0 { //add variable storage if needed
+            self.initial_stack_size+=code_chunk.variable_size;
+            self.stack.append(&mut vec![0; code_chunk.variable_size]);
+        }
+
+        println!("VM: stack_size={}, stack.len()={}", self.initial_stack_size, self.stack.len());
 
         let mut ip = 0;
 
@@ -57,8 +64,8 @@ impl VM{
 
         let mut status = Ok(());
 
-        while ip<self.code_chunk.program.len() {
-            match self.code_chunk.program[ip] {
+        while ip<code_chunk.program.len() {
+            match code_chunk.program[ip] {
                 OpCode::Add => {
                     let b = self.checked_stack_pop();
                     let a = self.checked_stack_pop();
@@ -118,7 +125,7 @@ impl VM{
                 }
                 OpCode::LoadConst(i) => {
                     idx_register = (idx_register<<8) + i as usize;
-                    self.stack.push(self.code_chunk.constant_pool[idx_register]);
+                    self.stack.push(code_chunk.constant_pool[idx_register]);
                     idx_register = 0;
                 }
             }

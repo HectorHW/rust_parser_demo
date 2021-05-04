@@ -9,13 +9,69 @@ mod compiler;
 mod vm;
 
 use crate::vm::VM;
-use crate::compiler::Chunk;
+use crate::compiler::{Chunk, Compiler};
+use std::io::{BufRead, BufReader};
+
+fn run_repl(){
+    let stdin_buffer = BufReader::new(std::io::stdin());
+    let mut stdin_iterator = stdin_buffer.lines();
+    let mut compiler = Compiler::new();
+    let mut vm = VM::new();
+
+    println!("REPL\nto exit type 'exit'");
+    loop{
+        let inp_str = stdin_iterator.next().unwrap().unwrap();
+
+        if inp_str.as_str().trim()=="exit" {
+            break;
+        }
+
+        let s = inp_str.trim();
+        let tokens: Vec<Token> = match tokenize(s)  {
+            Ok(res) => {res}
+            Err(msg) => {println!("{}", msg); continue;}
+        };
+
+        let ast = match parser::parse(&tokens) {
+            Ok(res) => {res}
+            Err(msg) => {println!("{}", msg); continue;}
+        };
+
+        lisp_print::visit(&ast);
+        println!();
+
+        let code_chunk = compiler.continue_compile(&ast);
+        let code_chunk = match code_chunk {
+            Ok(value) => {value}
+            Err(msg) => {
+                println!("{}", msg);
+                continue;
+            }
+        };
+
+        match vm.run(&code_chunk) {
+            Ok(_) => {}
+            Err(msg) => {
+                println!("{}", msg);
+            }
+        }
+
+    }
+
+
+}
+
 
 fn main() {
 
     let args:Vec<String> = env::args().collect();
 
     //args[0] - program name
+
+    if args.len()==1 {
+        run_repl();
+        return;
+    }
 
     if args.len()!=2 {
         println!("usage : exec.exe <filename>");
@@ -64,9 +120,9 @@ fn main() {
 
     code_chunk.dump_stdout();
 
-    let mut vm = VM::new(code_chunk);
+    let mut vm = VM::new();
 
-    match vm.run() {
+    match vm.run(&code_chunk) {
         Ok(_) => {}
         Err(msg) => {
             println!("{}", msg);
