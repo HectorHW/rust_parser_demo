@@ -84,7 +84,7 @@ fn main() {
     let filename = args.get(1).unwrap();
 
     let content = fs::read_to_string(filename).expect("failed to read file.");
-
+    #[cfg(debug_assertions)]
     println!("{}", content);
 
     let s = content.trim();
