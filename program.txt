@@ -1,6 +1,6 @@
-var a = 3+2*5;
+var a = 3+2*5; //variable with initializer
 var b = a/2;
-var c;
-a = 1;
+var c; //variable without initializer, 0 by default
+a = 1; //assignment
 b = 2;
-print a+b+5;
+print a+b+5; //print statement accepts expression
