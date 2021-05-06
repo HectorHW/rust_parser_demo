@@ -93,14 +93,14 @@ fn main() {
         Err(msg) => {println!("{}", msg); return;}
     };
 
-    /*
+    #[cfg(debug_assertions)]
      println!("{}",
               tokens
                   .iter()
                   .map(|x| format!("{}", x))
                   .collect::<Vec<String>>()
                   .join(", ")
-     );*/
+     );
 
     let ast = match parser::parse(&tokens) {
         Ok(res) => {res}
