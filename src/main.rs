@@ -84,7 +84,7 @@ fn main() {
     let filename = args.get(1).unwrap();
 
     let content = fs::read_to_string(filename).expect("failed to read file.");
-
+    #[cfg(debug_assertions)]
     println!("{}", content);
 
     let s = content.trim();
@@ -93,14 +93,14 @@ fn main() {
         Err(msg) => {println!("{}", msg); return;}
     };
 
-    /*
+    #[cfg(debug_assertions)]
      println!("{}",
               tokens
                   .iter()
                   .map(|x| format!("{}", x))
                   .collect::<Vec<String>>()
                   .join(", ")
-     );*/
+     );
 
     let ast = match parser::parse(&tokens) {
         Ok(res) => {res}

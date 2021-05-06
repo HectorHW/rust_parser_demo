@@ -1,6 +1,7 @@
-use crate::lexer::Token;
+use crate::lexer::{Token, MOCK_IDX};
 use std::iter::Peekable;
 use std::slice::Iter;
+use crate::lexer::Token::{RBracket, Semicolon};
 
 /*
 GRAMMAR:
@@ -55,7 +56,19 @@ impl Expr{
     }
 }
 
-fn consume(iterator: &mut Peekable<Iter<Token>>, expected:&Token, error_msg:String) -> Result<(), String> {
+fn consume<'a>(iterator: &'a mut Peekable<Iter<Token>>, expected:&Token) -> Result<&'a Token, String> {
+    let token = match iterator.next() {
+        Some(t) => {t}
+        None => {return Err("unexpected end".to_string())}
+    };
+
+    if std::mem::discriminant(token)!=std::mem::discriminant(expected){
+        return Err(format!("Expected {}, got {}", expected.get_token_type_name(), token));
+    }
+    return Ok(token);
+}
+
+fn consume_msg<'a>(iterator: &'a mut Peekable<Iter<Token>>, expected:&Token, error_msg:String) -> Result<&'a Token, String> {
     let token = match iterator.next() {
         Some(t) => {t}
         None => {return Err("unexpected end".to_string())}
@@ -64,20 +77,20 @@ fn consume(iterator: &mut Peekable<Iter<Token>>, expected:&Token, error_msg:Stri
     if std::mem::discriminant(token)!=std::mem::discriminant(expected){
         return Err(error_msg);
     }
-    return Ok(());
+    return Ok(token);
 }
 
 fn term(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     if let Some(token) = iterator.peek(){
         match token{
-            Token::Number(i) => {
+            Token::Number(i,_) => {
                 let mut tmp = Expr::new();
                 tmp.expr_type = ExprType::Literal(*i);
                 iterator.next();
                 return Ok(tmp);
             }
 
-            Token::Identifier(name) => {
+            Token::Identifier(name, _) => {
                 let mut tmp = Expr::new();
                 tmp.expr_type = ExprType::Variable(name.clone());
                 iterator.next();
@@ -85,22 +98,15 @@ fn term(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
                 return Ok(tmp);
             }
 
-            Token::LBracket => {
+            Token::LBracket(r) => {
                 iterator.next();
-                let expr = expr(iterator);
+                let expr = expr(iterator)?;
 
-                match iterator.next() {
-                    None => {return Err("unexpected EOL.".to_string());}
-                    Some(token) => {
-
-                        match token{
-                            Token::RBracket => {return expr;}
-                            _ => {return Err("unterminated string".to_string())}
-                        }
-                    }
-                }
+                consume_msg(iterator, &RBracket(MOCK_IDX), format!("expected ')' for opening '(' at {}", r))?;
+                return Ok(expr);
             }
-            _ => {return Err("unexpected token".to_string());}
+            r => {
+                return Err(format!("unexpected token {}", r));}
         }
     }else{
         return Err("unexpected end".to_string());
@@ -112,7 +118,7 @@ fn addition(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     let mut left_node = mult(iterator)?;
     while let Some(token) = iterator.peek() {
         match token {
-            Token::Op(c) if *c=='+'||*c=='-' => {
+            Token::Op(c, _) if *c=='+'||*c=='-' => {
                 iterator.next();
                 let right_node = mult(iterator)?;
                 let mut tmp = Expr::new();
@@ -132,7 +138,7 @@ fn mult(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     let mut left_node = term(iterator)?;
     while let Some(token) = iterator.peek(){
         match token {
-            Token::Op(c) if *c=='*' || *c=='/' => {
+            Token::Op(c, _) if *c=='*' || *c=='/' => {
                 iterator.next();
                 let right_node = term(iterator)?;
                 let mut tmp = Expr::new();
@@ -152,20 +158,17 @@ fn expr(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
 }
 
 fn print_stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
-    iterator.next(); //consume print
+    let print_kwrd = iterator.next().unwrap(); //consume print
 
     let mut res = Expr::new();
     res.expr_type = ExprType::PrintStmt;
     let sub = expr(iterator);
     let sub = match sub {
         Ok(e) => {e}
-        Err(_) => {return Err("expected expression after print".to_string())}
+        Err(s) => {return Err(s + "\n" + &*format!("expected expression after print at {}", print_kwrd.get_pos()))}
     };
 
-    match iterator.next() {
-        Some(Token::Semicolon) => {}
-        _ => {return Err("expected semicolon.".to_string())}
-    }
+    consume(iterator, &Semicolon(MOCK_IDX))?;
 
     res.children.push(sub);
     return Ok(res);
@@ -174,49 +177,51 @@ fn print_stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
 
 fn var_decl_stmt(iterator:&mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     iterator.next(); //consume var
-    let var_name = match iterator.next() {
-        Some(Token::Identifier(s)) => {s.clone()}
-        r => {return Err(format!("expected var name, got {}", r.unwrap()));}
+    let var_name = match consume(iterator, &Token::Identifier("".to_string(), MOCK_IDX)) {
+        Ok(t) => {match t{
+            Token::Identifier(s, _) => {s.clone()}
+            _ => {return Err("error parsing variable name".to_string())} //shouldn't happen
+        }}
+
+        Err(msg) => {
+            return Err(msg);
+        }
     };
 
     let mut res = Expr{expr_type:ExprType::VarDeclStmt(var_name), children:Vec::new()};
     match iterator.peek(){
-        Some(Token::Equals) => {
+        Some(Token::Equals(_)) => {
             iterator.next(); // consume =
             let assignee = expr(iterator)?;
             res.children.push(assignee);
         }
         _ => {}
     }
-    consume(iterator, &Token::Semicolon, "expected ';'".to_string())?;
+    consume(iterator, &Token::Semicolon(MOCK_IDX))?;
     return Ok(res);
 }
 
 
 fn assign_stmt(iterator:&mut Peekable<Iter<Token>>) -> Result<Expr, String> {
-    let var_name = iterator.next(); //take and cosume name
-
-    let var_name = match var_name.unwrap() {
-        Token::Identifier(s) => {s.clone()}
-        _ => {return Err("unexpected token".to_string())}
-    };
-
-    match iterator.next(){
-        None => {return Err("unexpected EOF".to_string())}
-        Some(token) => {
-            match token{
-                Token::Equals => {}
-                _ => {return Err("unexpected token".to_string())}
+    //let var_name = iterator.next(); //take and cosume name
+    let var_name = match consume(iterator, &Token::Identifier("".to_string(), MOCK_IDX))  {
+        Ok(r) => {
+            match r {
+                Token::Identifier(a, _) => {a.clone()}
+                _ => {return Err("error getting variable name".to_string())}
             }
         }
-    }
+        Err(msg) => {return Err(msg)}
+    };
 
-    let sub = expr(iterator)?;
+    let eq_idx = consume(iterator, &Token::Equals(MOCK_IDX))?.get_pos();
 
-    match iterator.next() {
-        Some(Token::Semicolon) => {}
-        _ => {return Err("expected semicolon.".to_string())}
-    }
+    let sub = match expr(iterator) {
+        Ok(r) => {r}
+        Err(msg) => {return Err(msg + "\n" + &*format!("expected expression in assignment at {}\n", eq_idx))}
+    };
+
+    consume(iterator, &Token::Semicolon(MOCK_IDX))?;
 
     let mut res = Expr::new();
     res.expr_type = ExprType::AssignStmt(var_name);
@@ -227,9 +232,9 @@ fn assign_stmt(iterator:&mut Peekable<Iter<Token>>) -> Result<Expr, String> {
 fn stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     if let Some(token) = iterator.peek() {
         match *token {
-            Token::Print => { return print_stmt(iterator); }
-            Token::Var => {return var_decl_stmt(iterator); }
-            Token::Identifier(_) => { return assign_stmt(iterator); }
+            Token::Print(_) => { return print_stmt(iterator); }
+            Token::Var(_) => {return var_decl_stmt(iterator); }
+            Token::Identifier(..) => { return assign_stmt(iterator); }
             r => {return Err(format!("unexpected token {}", r))}
         }
     }else{
@@ -240,13 +245,36 @@ fn stmt(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
 fn program(iterator: &mut Peekable<Iter<Token>>) -> Result<Expr, String> {
     let mut res = Expr::new();
     res.expr_type = ExprType::Program;
+    let mut had_error = false;
+    let mut err_msg = String::new();
     while let Some(x) = iterator.peek() {
         match x {
-            Token::EOF => {break;}
-            _ => {res.children.push(stmt(iterator)?);}
+            Token::EOF(..) => {break;}
+            _ => {
+                let expr_ = match stmt(iterator){
+                    Ok(t) => {t}
+                    Err(msg) => { //error parsing
+                        had_error = true;
+                        err_msg.push('\n');
+                        err_msg.push_str(&*msg);
+                        //synchronise, report error later
+                        while let Some(x) = iterator.next() {
+                            match x{ //read till semicolon, continue as if nothing happened
+                                Token::Semicolon(_) => {break;}
+                                _ =>{}
+                            }
+                        }
+                        continue;
+                    }
+                };
+                res.children.push(expr_);}
         }
 
     }
+    if had_error {
+        return Err(err_msg);
+    }
+
     return Ok(res);
 }
 
