@@ -128,7 +128,7 @@ pub fn tokenize(input:&str) -> Result<Vec<Token>, String>{
                             if p1.1=='*' && p2.1=='/' {ended_flag=true; break;}
                         }
 
-                        if !ended_flag {return Err("unterminated multiline comment".to_string())}
+                        if !ended_flag {return Err(format!("lexer error: unterminated multiline comment starting at {}", start))}
                         iterator.next(); //consume /
                     }
 
