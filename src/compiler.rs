@@ -39,8 +39,7 @@ impl Compiler {
     pub fn compile(ast:&Expr) -> Result<Chunk, String> {
 
         let mut name_map:HashMap<String, usize> = HashMap::new(); //variable -> variable_idx
-        let mut variable_size= 0usize;
-        Compiler::find_variables(ast, &mut name_map, &mut variable_size)?;
+        Compiler::find_variables(ast, &mut name_map)?;
 
         let mut code_chunk = Chunk::new();
         code_chunk.variable_size = name_map.len();
@@ -73,12 +72,17 @@ impl Compiler {
 
     fn _continue_compile(&mut self, ast:&Expr) -> Result<Chunk, String> {
         //has name_map
-        let mut variable_size = 0usize;
 
-        Compiler::find_variables(ast, &mut self.name_map, &mut variable_size)?;
+        //vm expects chunk.variable_size = amount of NEW variables added
+        //but instructions like LOAD_VAR may use previously defined variables with corresponding indices
+        let initial_name_count = self.name_map.len();
 
+        Compiler::find_variables(ast, &mut self.name_map)?;
+
+        //because of that, we need to keep indexation, but change amount of variables to account
+        //only for those that were introduced in current chunk
         let mut code_chunk = Chunk::new();
-        code_chunk.variable_size = variable_size;
+        code_chunk.variable_size = self.name_map.len() - initial_name_count;
         self.compile_ast(&mut code_chunk, ast)?;
 
         Ok(code_chunk)
@@ -86,7 +90,7 @@ impl Compiler {
 
 
 
-    fn find_variables<'a>(ast:&'a Expr, names:&mut HashMap<String, usize>, variable_counter: &mut usize) -> Result<(), String>{
+    fn find_variables(ast: &Expr, names:&mut HashMap<String, usize>) -> Result<(), String> {
         /*
         builds variable index & checks for name errors
          */
@@ -102,23 +106,22 @@ impl Compiler {
             ExprType::VarDeclStmt(variable_name) => {
                 if !ast.children.is_empty() {
                     Compiler::find_variables(ast.children.first().unwrap(),
-                    names, variable_counter)?;
+                    names)?;
                 }
 
 
                 if names.contains_key(variable_name.as_str()){
                     return Err(format!("redefinition of variable {}", variable_name));
                 }else{
-                    let idx = *variable_counter;
-                    names.insert(variable_name.to_string(), idx);
-                    *variable_counter += 1;
+                    names.insert(variable_name.to_string(), names.len());
+                    //define new variable at end
                     return Ok(());
                 }
             }
 
             _ => {
                 for item in ast.children.as_slice() {
-                    Compiler::find_variables(item, names, variable_counter)?;
+                    Compiler::find_variables(item, names)?;
                 }
             }
         }
